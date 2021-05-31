@@ -1,0 +1,159 @@
+Краткая информация о базе данных "Корабли":
+
+Рассматривается БД кораблей, участвовавших во второй мировой войне. Имеются следующие отношения:
+Classes (class, type, country, numGuns, bore, displacement)
+Ships (name, class, launched)
+Battles (name, date)
+Outcomes (ship, battle, result)
+Корабли в «классах» построены по одному и тому же проекту, и классу присваивается либо имя первого корабля, построенного по данному проекту, либо названию класса дается имя проекта, которое не совпадает ни с одним из кораблей в БД. Корабль, давший название классу, называется головным.
+Отношение Classes содержит имя класса, тип (bb для боевого (линейного) корабля или bc для боевого крейсера), страну, в которой построен корабль, число главных орудий, калибр орудий (диаметр ствола орудия в дюймах) и водоизмещение ( вес в тоннах). В отношении Ships записаны название корабля, имя его класса и год спуска на воду. В отношение Battles включены название и дата битвы, в которой участвовали корабли, а в отношении Outcomes – результат участия данного корабля в битве (потоплен-sunk, поврежден - damaged или невредим - OK).
+Замечания. 1) В отношение Outcomes могут входить корабли, отсутствующие в отношении Ships. 2) Потопленный корабль в последующих битвах участия не принимает.
+
+
+
+========================================
+Задание: 32
+Одной из характеристик корабля является половина куба калибра его главных орудий (mw). С точностью до 2 десятичных знаков определите среднее значение mw для кораблей каждой страны, у которой есть корабли в базе данных. 
+
+Ответ:
+select country,cast(avg(power(bore,3)/2.0) AS NUMERIC(6,2)) weight
+from
+(select country,bore,name
+from classes a,ships b
+where a.class=b.class
+union
+select country,bore,ship
+from classes,outcomes
+where class=ship) as c
+group by country
+========================================
+
+Задание: 46
+Для каждого корабля, участвовавшего в сражении при Гвадалканале (Guadalcanal), вывести название, водоизмещение и число орудий. 
+
+Ответ:
+select ship, displacement, numguns from 
+ships right join outcomes on ships.name=outcomes.ship
+left join classes on ships.class=classes.class OR classes.class=outcomes.ship
+where battle = 'Guadalcanal'
+========================================
+
+Задание: 43
+Укажите сражения, которые произошли в годы, не совпадающие ни с одним из годов спуска кораблей на воду.
+
+Ответ:
+select name from battles
+where YEAR(date) NOT IN (select ISNULL(launched, 0) from ships)
+========================================
+
+Задание: 39
+Найдите корабли, `сохранившиеся для будущих сражений`; т.е. выведенные из строя в одной битве (damaged), они участвовали в другой, произошедшей позже. 
+
+Ответ:
+select distinct d.ship from (select ship, date from (select ship, date, result from outcomes join battles on outcomes.battle=battles.name) x where result = 'damaged') AS d, (select ship, date, result from outcomes join battles on outcomes.battle=battles.name) x
+where d.ship=x.ship AND d.date<x.date
+========================================
+
+
+
+
+
+
+
+
+Краткая информация о базе данных "Компьютерная фирма":
+
+Схема БД состоит из четырех таблиц:
+Product(maker, model, type)
+PC(code, model, speed, ram, hd, cd, price)
+Laptop(code, model, speed, ram, hd, price, screen)
+Printer(code, model, color, type, price)
+Таблица Product представляет производителя (maker), номер модели (model) и тип ('PC' - ПК, 'Laptop' - ПК-блокнот или 'Printer' - принтер). Предполагается, что номера моделей в таблице Product уникальны для всех производителей и типов продуктов. В таблице PC для каждого ПК, однозначно определяемого уникальным кодом – code, указаны модель – model (внешний ключ к таблице Product), скорость - speed (процессора в мегагерцах), объем памяти - ram (в мегабайтах), размер диска - hd (в гигабайтах), скорость считывающего устройства - cd (например, '4x') и цена - price. Таблица Laptop аналогична таблице РС за исключением того, что вместо скорости CD содержит размер экрана -screen (в дюймах). В таблице Printer для каждой модели принтера указывается, является ли он цветным - color ('y', если цветной), тип принтера - type (лазерный – 'Laser', струйный – 'Jet' или матричный – 'Matrix') и цена - price.
+
+
+========================================
+Задание: 41
+Для каждого производителя, у которого присутствуют модели хотя бы в одной из таблиц PC, Laptop или Printer,
+определить максимальную цену на его продукцию.
+Вывод: имя производителя, если среди цен на продукцию данного производителя присутствует NULL, то выводить для этого производителя NULL,
+иначе максимальную цену.
+
+Ответ:
+select maker, max(price) from 
+(select maker, product.model, type, price from product join pc on product.model=pc.model
+union
+select maker, product.model, type, price from product join laptop on product.model=laptop.model
+union
+select maker, product.model, product.type, price from product join printer on product.model=printer.model) x
+group by maker
+having count(*)-count(price)=0
+union
+select maker, NULL from 
+(select maker, product.model, type, price from product join pc on product.model=pc.model
+union
+select maker, product.model, type, price from product join laptop on product.model=laptop.model
+union
+select maker, product.model, product.type, price from product join printer on product.model=printer.model) x
+group by maker
+having count(*)-count(price)>0
+========================================
+
+Задание: 40
+Найти производителей, которые выпускают более одной модели, при этом все выпускаемые производителем модели являются продуктами одного типа.
+Вывести: maker, type 
+
+Ответ:
+select maker, max(type) AS type from (
+select distinct a.maker, a.type from product a, product b
+where a.maker=b.maker AND a.model<>b.model) x
+group by maker
+having count(type)=1
+========================================
+
+Задание: 27
+Найдите средний размер диска ПК каждого из тех производителей, которые выпускают и принтеры. Вывести: maker, средний размер HD. 
+
+Ответ:
+select maker, avg(hd) from product join pc on product.model=pc.model
+where maker in (select maker from product where type='printer')
+group by maker
+========================================
+
+Задание: 24
+Перечислите номера моделей любых типов, имеющих самую высокую цену по всей имеющейся в базе данных продукции. 
+
+Ответ:
+with u_tab AS (select model, price from pc
+union
+select model, price from laptop
+union
+select model, price from printer)
+select model from u_tab where price in (select max(price) from u_tab)
+========================================
+
+Задание: 8
+Найдите производителя, выпускающего ПК, но не ПК-блокноты. 
+
+Ответ:
+select maker from product where type='pc'
+EXCEPT
+select maker from product where type='laptop'
+========================================
+
+Задание: 7
+Найдите номера моделей и цены всех имеющихся в продаже продуктов (любого типа) производителя B (латинская буква). 
+
+Ответ:
+select product.model, price from product join pc on product.model=pc.model
+where maker='B'
+UNION
+select product.model, price from product join laptop on product.model=laptop.model
+where maker='B'
+UNION
+select product.model, price from product join printer on product.model=printer.model
+where maker='B'
+========================================
+
+
+
+
